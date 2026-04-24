@@ -57,7 +57,38 @@ createApp({
     const pluginList = ref([]);
 
     // ===== 设置 =====
-    const cfg = ref({ strmDir: '/app/media/strm', mediaRoot: '/app/media', tmdbKey: '' });
+    const cfg = ref({
+      // 账号
+      username: 'admin',
+      password: '',
+      // 媒体库
+      strmDir: '/app/media/strm',
+      mediaRoot: '/app/media',
+      // TMDB
+      tmdbKey: '',
+      tmdbProxy: '',
+      // 预加载
+      preloadEnabled: true,
+      preloadAheadCount: 3,
+      // Stream 缓存
+      cacheTtl: 300,
+      cacheMaxSize: 2000,
+      dnsCacheTtl: 3600,
+      tcpPreconnect: true,
+      http2Enabled: true,
+      // Emby
+      embyEnabled: false,
+      embyHost: 'http://localhost:8096',
+      embyApiKey: '',
+      // TG
+      tgEnabled: false,
+      tgToken: '',
+      tgAdminIds: '',
+      // CMS
+      cmsAutoSync: false,
+      cmsRssRefresh: 30,
+      cmsDownloadPath: '/app/media/downloads',
+    });
 
     // ===== 转存 =====
     const transferLink = ref('');
@@ -75,6 +106,13 @@ createApp({
     const subscriptions = ref([]);
     const history = ref([]);
     const cmsStats = ref({});
+
+    // ===== 自动整理 =====
+    const organizeTasks = ref([]);
+    const organizing = ref(false);
+    const orgFolderRule = ref('{first_letter}-{title} ({year}) [({tmdb_id})]');
+    const orgFileRule = ref('{title}.{year}<.{resource_pix}><.{fps}><.{resource_team}>');
+    const organizeLimit = ref(50);
 
     // ===== TG =====
     const tgEnabled = ref(false);
@@ -343,6 +381,29 @@ createApp({
 
     function openAddSub() { addSubscription(); }
 
+    // ===== 自动整理 =====
+    async function loadOrganizeStatus() {
+      try {
+        const r = await axios.get(API + '/organize/status');
+        organizeTasks.value = r.data.tasks || [];
+      } catch (e) {}
+    }
+
+    async function runOrganize() {
+      if (organizing.value) return;
+      organizing.value = true;
+      try {
+        const r = await axios.post(API + '/organize/run', null, {
+          params: { limit: organizeLimit.value || 50 }
+        });
+        addLog('success', `整理已启动：${r.data.submitted} 个文件`);
+        setTimeout(loadOrganizeStatus, 1000);
+      } catch (e) {
+        addLog('error', '整理启动失败');
+      }
+      organizing.value = false;
+    }
+
     // ===== TG =====
     async function loadTGConfig() {
       try {
@@ -440,15 +501,73 @@ createApp({
     async function loadConfig() {
       try {
         const r = await axios.get(API + '/config');
-        cfg.value = { ...cfg.value, ...r.data };
+        const d = r.data;
+        // API 用 snake_case，前端用 camelCase，做映射
+        cfg.value = {
+          username: d.username || 'admin',
+          password: '',
+          strmDir: d.strm_dir || '/app/media/strm',
+          mediaRoot: d.media_root || '/app/media',
+          tmdbKey: d.tmdb_key || '',
+          tmdbProxy: d.tmdb_proxy || '',
+          preloadEnabled: d.preload_enabled ?? true,
+          preloadAheadCount: d.preload_ahead_count ?? 3,
+          cacheTtl: d.cache_ttl ?? 300,
+          cacheMaxSize: d.cache_max_size ?? 2000,
+          dnsCacheTtl: d.dns_cache_ttl ?? 3600,
+          tcpPreconnect: d.tcp_preconnect ?? true,
+          http2Enabled: d.http2_enabled ?? true,
+          embyEnabled: d.emby_enabled ?? false,
+          embyHost: d.emby_host || 'http://localhost:8096',
+          embyApiKey: d.emby_api_key || '',
+          tgEnabled: d.tg_enabled ?? false,
+          tgToken: '',
+          tgAdminIds: (d.tg_admin_ids || []).join(','),
+          cmsAutoSync: d.cms_auto_sync ?? false,
+          cmsRssRefresh: d.cms_rss_refresh ?? 30,
+          cmsDownloadPath: d.cms_download_path || '/app/media/downloads',
+        };
       } catch (e) {}
     }
 
     async function saveSettings() {
+      // 解析 TG admin IDs
+      const tgAdminIds = String(cfg.value.tgAdminIds).split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
       await axios.post(API + '/config', null, {
-        params: { username: cfg.value.username, password: cfg.value.password, strm_dir: cfg.value.strmDir, tmdb_key: cfg.value.tmdbKey }
+        params: {
+          // 账号
+          username: cfg.value.username,
+          password: cfg.value.password || undefined,
+          // 媒体库
+          strm_dir: cfg.value.strmDir,
+          media_root: cfg.value.mediaRoot,
+          // TMDB
+          tmdb_key: cfg.value.tmdbKey,
+          tmdb_proxy: cfg.value.tmdbProxy,
+          // 预加载
+          preload_enabled: cfg.value.preloadEnabled,
+          preload_ahead_count: cfg.value.preloadAheadCount,
+          // Stream 缓存
+          cache_ttl: cfg.value.cacheTtl,
+          cache_max_size: cfg.value.cacheMaxSize,
+          dns_cache_ttl: cfg.value.dnsCacheTtl,
+          tcp_preconnect: cfg.value.tcpPreconnect,
+          http2_enabled: cfg.value.http2Enabled,
+          // Emby
+          emby_enabled: cfg.value.embyEnabled,
+          emby_api_key: cfg.value.embyApiKey,
+          emby_host: cfg.value.embyHost,
+          // TG
+          tg_enabled: cfg.value.tgEnabled,
+          tg_token: cfg.value.tgToken || undefined,
+          tg_admin_ids: tgAdminIds,
+          // CMS
+          cms_auto_sync: cfg.value.cmsAutoSync,
+          cms_rss_refresh: cfg.value.cmsRssRefresh,
+          cms_download_path: cfg.value.cmsDownloadPath,
+        }
       });
-      addLog('success', '设置已保存');
+      addLog('success', '✅ 配置已保存');
     }
 
     // ===== 日志 =====
@@ -503,6 +622,9 @@ createApp({
       preloadEnabled, embyWebhookUrl, rebuildPreload,
       // CMS
       subscriptions, history, cmsStats, loadSubscriptions, loadHistory, loadCmsStats, openAddSub, delSub,
+      // 自动整理
+      organizeTasks, organizing, orgFolderRule, orgFileRule, organizeLimit,
+      loadOrganizeStatus, runOrganize,
       // TG
       tgEnabled, tgToken, tgAdminIds, tgMsg, loadTGConfig, saveTG,
       // 定时

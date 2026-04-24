@@ -174,6 +174,15 @@ select { cursor: pointer; }
 .task-item .task-info { flex: 1; }
 .task-item .task-name { font-size: .9em; font-weight: 500; }
 .task-item .task-meta { font-size: .75em; color: var(--text2); margin-top: 2px; }
+.task-item .task-left { flex: 1; min-width: 0; }
+.task-item .task-left .task-name { font-size: .9em; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-item .task-left .task-meta { font-size: .75em; color: var(--text2); margin-top: 2px; }
+.task-item .task-left .task-error { font-size: .75em; color: var(--red); margin-top: 2px; }
+.task-item .task-right { flex-shrink: 0; }
+.task-item.status-pending { border-left: 3px solid var(--orange); }
+.task-item.status-running { border-left: 3px solid var(--blue); }
+.task-item.status-done { border-left: 3px solid var(--green); }
+.task-item.status-failed { border-left: 3px solid var(--red); }
 
 /* 设置页面 */
 .settings-section { margin-bottom: 32px; }
@@ -292,6 +301,7 @@ iframe.player { width: 100%; height: 100%; border: none; border-radius: 8px; bac
         <button :class="{active: view === 'transfer'}" @click="view = 'transfer'">📥 转存</button>
         <button :class="{active: view === 'preload'}" @click="view = 'preload'">⚡ 预加载</button>
         <button :class="{active: view === 'cms'}" @click="view = 'cms'">📺 CMS</button>
+        <button :class="{active: view === 'organize'}" @click="view = 'organize'">📥 自动整理</button>
         <button :class="{active: view === 'scheduler'}" @click="view = 'scheduler'">⏰ 定时</button>
         <button :class="{active: view === 'tg'}" @click="view = 'tg'">📱 TG机器人</button>
         <button :class="{active: view === 'webhook'}" @click="view = 'webhook'">🔗 Webhook</button>
@@ -662,55 +672,248 @@ iframe.player { width: 100%; height: 100%; border: none; border-radius: 8px; bac
         </div>
       </div>
 
+      <!-- 自动整理页 -->
+      <div v-if="view === 'organize'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">📥 自动整理</div>
+            <div class="page-sub">TMDB识别 · 规则重命名 · 自动分类</div>
+          </div>
+        </div>
+
+        <!-- 整理规则配置 -->
+        <div class="settings-section">
+          <h3>📋 重命名规则</h3>
+          <div class="card">
+            <div class="card-body">
+              <div class="form-group" style="margin-bottom:12px">
+                <label>文件夹命名规则</label>
+                <input v-model="orgFolderRule" class="input" placeholder="{first_letter}-{title} ({year}) [({tmdb_id})]">
+                <div class="desc" style="margin-top:4px;color:var(--text2);font-size:.75em">
+                  变量：{first_letter} {title} {year} {tmdb_id}
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>文件命名规则</label>
+                <input v-model="orgFileRule" class="input" placeholder="{title}.{year}&lt;.{resource_pix}&gt;&lt;.{fps}&gt;&lt;.{resource_team}&gt;">
+                <div class="desc" style="margin-top:4px;color:var(--text2);font-size:.75em">
+                  块语法：&lt;.{resource_pix}&gt; 表示该变量非空时才输出
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 整理任务 -->
+        <div class="settings-section">
+          <h3>🚀 执行整理</h3>
+          <div class="card">
+            <div class="card-body">
+              <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+                <button class="btn btn-primary" @click="runOrganize" :disabled="organizing">
+                  {{ organizing ? '整理中...' : '▶️ 执行整理' }}
+                </button>
+                <button class="btn" @click="loadOrganizeStatus">🔄 刷新</button>
+                <input v-model.number="organizeLimit" type="number" class="input" style="width:80px" min="1" max="200" placeholder="50">
+                <span style="color:var(--text2);line-height:2.2;font-size:.85em">每次最多处理</span>
+              </div>
+
+              <!-- 任务列表 -->
+              <div v-if="organizeTasks.length" style="max-height:400px;overflow-y:auto">
+                <div v-for="t in organizeTasks" :key="t.id" class="task-item" :class="'status-'+t.status">
+                  <div class="task-left">
+                    <div class="task-name">{{ t.source }}</div>
+                    <div class="task-meta">
+                      <span v-if="t.title">{{ t.title }}</span>
+                      <span v-if="t.media_type === 'series'"> 第{{ t.season }}季第{{ t.episode }}集</span>
+                      <span v-if="t.year"> ({{ t.year }})</span>
+                    </div>
+                    <div v-if="t.error" class="task-error">{{ t.error }}</div>
+                  </div>
+                  <div class="task-right">
+                    <span class="badge" :class="'badge-'+t.status">{{ t.status }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-else style="color:var(--text2);text-align:center;padding:20px">
+                暂无整理任务，先点击「执行整理」
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 设置页 -->
       <div v-if="view === 'settings'">
         <div class="page-header">
           <div>
             <div class="page-title">⚙️ 设置</div>
-            <div class="page-sub">基础配置 · 高级选项</div>
+            <div class="page-sub">全部配置 · 建议首次登录后修改密码</div>
           </div>
         </div>
+
+        <!-- 账号信息 -->
         <div class="settings-section">
-          <h3>账号信息</h3>
+          <h3>🔐 账号信息</h3>
           <div class="card">
             <div class="card-body">
-              <div class="setting-row">
-                <div class="info"><div class="name">用户名</div><div class="desc">{{ userInfo.username || '-' }}</div></div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>用户名</label>
+                <input v-model="cfg.username" class="input" placeholder="admin">
               </div>
-              <div class="setting-row">
-                <div class="info"><div class="name">用户ID</div><div class="desc">{{ userInfo.user_id || '-' }}</div></div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>密码</label>
+                <input v-model="cfg.password" type="password" class="input" placeholder="不修改请留空">
               </div>
             </div>
           </div>
         </div>
+
+        <!-- 媒体库 -->
         <div class="settings-section">
-          <h3>媒体库</h3>
+          <h3>📁 媒体库</h3>
           <div class="card">
             <div class="card-body">
-              <div class="form-group" style="margin-bottom:12px">
-                <label>STRM 输出目录</label>
-                <input v-model="cfg.strmDir" class="input" placeholder="/app/media/strm">
-              </div>
               <div class="form-group" style="margin-bottom:12px">
                 <label>媒体根目录</label>
                 <input v-model="cfg.mediaRoot" class="input" placeholder="/app/media">
               </div>
-            </div>
-          </div>
-        </div>
-        <div class="settings-section">
-          <h3>TMDB 识别</h3>
-          <div class="card">
-            <div class="card-body">
               <div class="form-group" style="margin-bottom:12px">
-                <label>TMDB API Key</label>
-                <input v-model="cfg.tmdbKey" class="input" placeholder="请输入 TMDB API Key（可选）">
+                <label>STRM 输出目录</label>
+                <input v-model="cfg.strmDir" class="input" placeholder="/app/media/strm">
               </div>
             </div>
           </div>
         </div>
+
+        <!-- TMDB -->
+        <div class="settings-section">
+          <h3>🎬 TMDB 识别</h3>
+          <div class="card">
+            <div class="card-body">
+              <div class="form-group" style="margin-bottom:12px">
+                <label>TMDB API Key</label>
+                <input v-model="cfg.tmdbKey" class="input" placeholder="请输入 TMDB API Key">
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>TMDB 代理地址（可选，国内服务器填写）</label>
+                <input v-model="cfg.tmdbProxy" class="input" placeholder="如 https://your-vercel-app.vercel.app">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Emby -->
+        <div class="settings-section">
+          <h3>📺 Emby 配置</h3>
+          <div class="card">
+            <div class="card-body">
+              <div class="setting-row" style="margin-bottom:12px">
+                <div class="info"><div class="name">启用 Emby 集成</div></div>
+                <label class="toggle"><input type="checkbox" v-model="cfg.embyEnabled"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>Emby 地址</label>
+                <input v-model="cfg.embyHost" class="input" placeholder="http://localhost:8096">
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>Emby API Key</label>
+                <input v-model="cfg.embyApiKey" class="input" placeholder="Emby 设置 → API Key">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 预加载 -->
+        <div class="settings-section">
+          <h3>⚡ 秒级起播 · 预加载</h3>
+          <div class="card">
+            <div class="card-body">
+              <div class="setting-row" style="margin-bottom:12px">
+                <div class="info"><div class="name">启用预加载</div></div>
+                <label class="toggle"><input type="checkbox" v-model="cfg.preloadEnabled"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>预加载集数（连续播放时自动预取）</label>
+                <input v-model.number="cfg.preloadAheadCount" type="number" class="input" min="1" max="10" placeholder="3">
+              </div>
+              <div class="setting-row" style="margin-bottom:12px">
+                <div class="info"><div class="name">TCP 预连接</div><div class="desc">播放前提前建立 TCP/TLS 连接</div></div>
+                <label class="toggle"><input type="checkbox" v-model="cfg.tcpPreconnect"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="setting-row" style="margin-bottom:12px">
+                <div class="info"><div class="name">HTTP/2</div><div class="desc">启用 HTTP/2 多路复用</div></div>
+                <label class="toggle"><input type="checkbox" v-model="cfg.http2Enabled"><span class="toggle-slider"></span></label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stream 缓存 -->
+        <div class="settings-section">
+          <h3>🗃️ 流缓存</h3>
+          <div class="card">
+            <div class="card-body">
+              <div class="form-group" style="margin-bottom:12px">
+                <label>缓存 TTL（秒）</label>
+                <input v-model.number="cfg.cacheTtl" type="number" class="input" min="60" placeholder="300">
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>缓存最大条数</label>
+                <input v-model.number="cfg.cacheMaxSize" type="number" class="input" min="100" placeholder="2000">
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>DNS 缓存 TTL（秒）</label>
+                <input v-model.number="cfg.dnsCacheTtl" type="number" class="input" min="60" placeholder="3600">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TG 机器人 -->
+        <div class="settings-section">
+          <h3>🤖 Telegram 机器人</h3>
+          <div class="card">
+            <div class="card-body">
+              <div class="setting-row" style="margin-bottom:12px">
+                <div class="info"><div class="name">启用 TG 机器人</div></div>
+                <label class="toggle"><input type="checkbox" v-model="cfg.tgEnabled"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>Bot Token</label>
+                <input v-model="cfg.tgToken" class="input" placeholder="@BotFather 获取">
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>管理员 TG User ID（多个用逗号分隔）</label>
+                <input v-model="cfg.tgAdminIds" class="input" placeholder="123456789,987654321">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CMS 自动整理 -->
+        <div class="settings-section">
+          <h3>📥 CMS 自动整理</h3>
+          <div class="card">
+            <div class="card-body">
+              <div class="setting-row" style="margin-bottom:12px">
+                <div class="info"><div class="name">订阅自动同步</div><div class="desc">有新订阅时自动执行同步</div></div>
+                <label class="toggle"><input type="checkbox" v-model="cfg.cmsAutoSync"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>RSS 刷新间隔（分钟）</label>
+                <input v-model.number="cfg.cmsRssRefresh" type="number" class="input" min="5" placeholder="30">
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>下载保存路径</label>
+                <input v-model="cfg.cmsDownloadPath" class="input" placeholder="/app/media/downloads">
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div style="display:flex;gap:8px;margin-top:20px">
-          <button class="btn btn-primary" @click="saveSettings">💾 保存设置</button>
+          <button class="btn btn-primary" @click="saveSettings">💾 保存全部配置</button>
           <button class="btn btn-danger" @click="logout">🔓 退出登录</button>
         </div>
       </div>

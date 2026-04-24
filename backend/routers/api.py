@@ -444,30 +444,179 @@ async def delete_plugin(plugin_id: str, token: str = Header(...)):
 async def get_config(token: str = Header(...)):
     if not _verify_token(token): raise HTTPException(status_code=401, detail="未登录")
     return {
+        # 账号
         "username": config.username,
+        # 媒体库
         "strm_dir": config.strm_output_dir,
         "media_root": config.media_root,
+        # TMDB
         "tmdb_key": config.tmdb_key,
-        "preload_enabled": config.preload_enabled,
-        "cache_ttl": config.cache_ttl,
-        "cache_max_size": config.cache_max_size,
+        "tmdb_proxy": config.tmdb_proxy,
+        # 预加载
+        "preload_enabled": config.preload.enabled,
+        "preload_ahead_count": config.preload.ahead_count,
+        # Stream 缓存
+        "cache_ttl": config.stream_cache.ttl,
+        "cache_max_size": config.stream_cache.max_size,
+        "dns_cache_ttl": config.stream_cache.dns_cache_ttl,
+        "tcp_preconnect": config.stream_cache.tcp_preconnect,
+        "http2_enabled": config.stream_cache.http2_enabled,
+        # Emby
+        "emby_enabled": config.emby.enabled,
+        "emby_api_key": config.emby.api_key,
+        "emby_host": config.emby.host,
+        # TG
+        "tg_enabled": config.tg.enabled,
+        "tg_token_set": bool(config.tg.token),
+        "tg_admin_ids": config.tg.admin_ids,
+        # CMS
+        "cms_auto_sync": config.cms.auto_sync,
+        "cms_rss_refresh": config.cms.rss_refresh_minutes,
+        "cms_download_path": config.cms.download_path,
     }
 
 
 @router.post("/config")
 async def update_config(
+    # 账号
     username: Optional[str] = None,
     password: Optional[str] = None,
+    # 媒体库
     strm_dir: Optional[str] = None,
+    media_root: Optional[str] = None,
+    # TMDB
     tmdb_key: Optional[str] = None,
+    tmdb_proxy: Optional[str] = None,
+    # 预加载
     preload_enabled: Optional[bool] = None,
+    preload_ahead_count: Optional[int] = None,
+    # Stream 缓存
+    cache_ttl: Optional[int] = None,
+    cache_max_size: Optional[int] = None,
+    dns_cache_ttl: Optional[int] = None,
+    tcp_preconnect: Optional[bool] = None,
+    http2_enabled: Optional[bool] = None,
+    # Emby
+    emby_enabled: Optional[bool] = None,
+    emby_api_key: Optional[str] = None,
+    emby_host: Optional[str] = None,
+    # TG
+    tg_enabled: Optional[bool] = None,
+    tg_token: Optional[str] = None,
+    tg_admin_ids: Optional[List[int]] = None,
+    # CMS
+    cms_auto_sync: Optional[bool] = None,
+    cms_rss_refresh: Optional[int] = None,
+    cms_download_path: Optional[str] = None,
     token: str = Header(...),
 ):
     if not _verify_token(token): raise HTTPException(status_code=401, detail="未登录")
+    # 账号
     if username: config.username = username
     if password: config.password = password
+    # 媒体库
     if strm_dir: config.strm_output_dir = strm_dir
-    if tmdb_key: config.tmdb_key = tmdb_key
-    if preload_enabled is not None: config.preload_enabled = preload_enabled
+    if media_root: config.media_root = media_root
+    # TMDB
+    if tmdb_key is not None: config.tmdb_key = tmdb_key
+    if tmdb_proxy is not None: config.tmdb_proxy = tmdb_proxy
+    # 预加载
+    if preload_enabled is not None: config.preload.enabled = preload_enabled
+    if preload_ahead_count is not None: config.preload.ahead_count = preload_ahead_count
+    # Stream 缓存
+    if cache_ttl is not None: config.stream_cache.ttl = cache_ttl
+    if cache_max_size is not None: config.stream_cache.max_size = cache_max_size
+    if dns_cache_ttl is not None: config.stream_cache.dns_cache_ttl = dns_cache_ttl
+    if tcp_preconnect is not None: config.stream_cache.tcp_preconnect = tcp_preconnect
+    if http2_enabled is not None: config.stream_cache.http2_enabled = http2_enabled
+    # Emby
+    if emby_enabled is not None: config.emby.enabled = emby_enabled
+    if emby_api_key is not None: config.emby.api_key = emby_api_key
+    if emby_host is not None: config.emby.host = emby_host
+    # TG
+    if tg_enabled is not None: config.tg.enabled = tg_enabled
+    if tg_token is not None: config.tg.token = tg_token
+    if tg_admin_ids is not None: config.tg.admin_ids = tg_admin_ids
+    # CMS
+    if cms_auto_sync is not None: config.cms.auto_sync = cms_auto_sync
+    if cms_rss_refresh is not None: config.cms.rss_refresh_minutes = cms_rss_refresh
+    if cms_download_path is not None: config.cms.download_path = cms_download_path
+
     config.save()
     return {"status": "ok"}
+
+
+# ===== 自动整理 API =====
+
+_organize_service: Optional[AutoOrganizeService] = None
+
+
+def get_organize_service():
+    global _organize_service
+    if _organize_service is None:
+        from ..guangya_client import GuangyaClient
+        from .metadata import TMDBService
+        client = GuangyaClient()
+        tmdb = TMDBService(config.tmdb_key, config.tmdb_proxy)
+        sync_db = _load_sync_db()
+        _organize_service = AutoOrganizeService(
+            source_cid=config.cms.download_path,
+            existing_cid="",
+            redundant_cid="",
+            folder_rule="{first_letter}-{title} ({year}) [({tmdb_id})]",
+            file_rule="{title}.{year}<.{resource_pix}><.{fps}><.{resource_version}><.{resource_source}><.{resource_team}>",
+            guangya_client=client,
+            tmdb_client=tmdb,
+            emby_client=None,
+            sync_db=sync_db,
+        )
+    return _organize_service
+
+
+def _load_sync_db() -> Dict:
+    path = Path("/app/config/sync_db.json")
+    if path.exists():
+        try:
+            import json
+            return json.loads(path.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+@router.get("/organize/status")
+async def organize_status(token: str = Header(...)):
+    if not _verify_token(token): raise HTTPException(status_code=401, detail="未登录")
+    svc = get_organize_service()
+    tasks = svc.get_tasks()
+    return {
+        "tasks": [
+            {
+                "id": t.id,
+                "source": t.source_file,
+                "target": t.target_path,
+                "status": t.status,
+                "media_type": t.media_type,
+                "title": t.title,
+                "year": t.year,
+                "season": t.season,
+                "episode": t.episode,
+                "error": t.error,
+            }
+            for t in tasks
+        ]
+    }
+
+
+@router.post("/organize/run")
+async def organize_run(
+    limit: int = 50,
+    token: str = Header(...),
+):
+    if not _verify_token(token): raise HTTPException(status_code=401, detail="未登录")
+    svc = get_organize_service()
+    tasks = await svc.run(limit=limit)
+    return {
+        "submitted": len(tasks),
+        "tasks": [{"id": t.id, "source": t.source_file, "status": t.status} for t in tasks],
+    }

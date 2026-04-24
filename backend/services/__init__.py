@@ -6,3 +6,4 @@ from .emby_preload import EmbyWebhookHandler, emby_preload
 from .telegram import TelegramBot
 from .transfer import TransferService, TransferTask, TransferStatus
 from .cms import CMSServices
+from .auto_organize import AutoOrganizeService, OrganizeTask
