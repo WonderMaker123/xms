@@ -127,6 +127,48 @@ select { cursor: pointer; }
 .empty-state .icon { font-size: 3em; margin-bottom: 12px; opacity: .3; }
 .empty-state p { font-size: .85em; }
 
+/* 优化技术卡片 */
+.opt-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: var(--bg); border-radius: var(--radius); }
+.opt-icon { font-size: 1.5em; flex-shrink: 0; }
+.opt-name { font-weight: 600; font-size: .9em; margin-bottom: 4px; }
+.opt-desc { font-size: .8em; color: var(--text2); }
+
+/* 代码块 */
+.code-block { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; font-family: 'Fira Code', monospace; font-size: .8em; word-break: break-all; color: var(--green); }
+
+/* 进度条 */
+.progress-bar { height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+.progress-bar .fill { height: 100%; background: var(--blue); transition: width .3s; }
+
+/* 日志 */
+.log-box { max-height: 300px; overflow-y: auto; font-family: 'Fira Code', monospace; font-size: .75em; }
+.log-line { padding: 4px 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.log-line.info { color: var(--blue); }
+.log-line.success { color: var(--green); }
+.log-line.error { color: var(--red); }
+.log-line.warn { color: var(--orange); }
+
+/* 文件列表 */
+.file-list { display: flex; flex-direction: column; }
+.file-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--radius); cursor: pointer; transition: background .1s; }
+.file-item:hover { background: var(--bg2); }
+.file-item .icon { font-size: 1.1em; flex-shrink: 0; }
+.file-item .name { flex: 1; font-size: .85em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-item .size { font-size: .75em; color: var(--text2); flex-shrink: 0; }
+.file-item .actions { display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.file-item:hover .actions { opacity: 1; }
+
+/* 标签页 */
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; background: var(--bg); border-radius: var(--radius); padding: 3px; }
+.tab-btn { flex: 1; padding: 7px; border: none; background: none; color: var(--text2); cursor: pointer; border-radius: 7px; font-size: .8em; transition: all .15s; }
+.tab-btn.active { background: var(--bg3); color: var(--text); font-weight: 500; }
+
+/* 播放器弹窗 */
+.player-modal { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 1000; display: flex; justify-content: center; align-items: center; }
+.player-box { width: 90vw; max-width: 1200px; position: relative; }
+.player-close { position: absolute; top: -36px; right: 0; background: none; border: none; color: #fff; font-size: 1.5em; cursor: pointer; }
+.player { width: 100%; aspect-ratio: 16/9; background: #000; border: none; border-radius: 8px; }
+
 /* 任务列表 */
 .task-item { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .task-item .task-info { flex: 1; }
@@ -189,9 +231,24 @@ iframe.player { width: 100%; height: 100%; border: none; border-radius: 8px; bac
       <div class="login-logo">🦆</div>
       <div class="login-sub">光鸭云盘 · STRM + 302 播放服务</div>
       <div class="login-tabs">
+        <button :class="{active: loginTab === 'account'}" @click="loginTab = 'account'">账号登录</button>
         <button :class="{active: loginTab === 'qrcode'}" @click="loginTab = 'qrcode'; generateQRCode()">扫码登录</button>
         <button :class="{active: loginTab === 'phone'}" @click="loginTab = 'phone'">手机登录</button>
       </div>
+      <!-- 账号密码登录 -->
+      <div v-if="loginTab === 'account'">
+        <div class="form-group" style="margin-bottom:10px">
+          <input v-model="accountUsername" placeholder="账号" class="input" @keyup.enter="accountLogin">
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <input v-model="accountPassword" type="password" placeholder="密码" class="input" @keyup.enter="accountLogin">
+        </div>
+        <button class="btn btn-primary" style="width:100%" @click="accountLogin" :disabled="loggingIn">
+          {{ loggingIn ? '登录中...' : '登录' }}
+        </button>
+        <div v-if="loginError" class="status-msg error" style="margin-top:10px">{{ loginError }}</div>
+      </div>
+      <!-- 扫码登录 -->
       <div v-if="loginTab === 'qrcode'">
         <div v-if="!qrcode" class="qrcode-loading">⏳ 加载中...</div>
         <div v-else class="qrcode-box">
@@ -201,6 +258,7 @@ iframe.player { width: 100%; height: 100%; border: none; border-radius: 8px; bac
         </div>
         <div v-if="qrcodeStatus" class="status-msg" :class="qrcodeStatus.type">{{ qrcodeStatus.msg }}</div>
       </div>
+      <!-- 手机登录 -->
       <div v-if="loginTab === 'phone'">
         <div class="form-group" style="margin-bottom:10px">
           <input v-model="phone" placeholder="手机号" class="input" maxlength="11">
@@ -231,7 +289,11 @@ iframe.player { width: 100%; height: 100%; border: none; border-radius: 8px; bac
         <button :class="{active: view === 'dashboard'}" @click="view = 'dashboard'">📊 概览</button>
         <button :class="{active: view === 'files'}" @click="view = 'files'; loadFiles(null)">📁 文件</button>
         <button :class="{active: view === 'strm'}" @click="view = 'strm'">🎬 STRM</button>
+        <button :class="{active: view === 'transfer'}" @click="view = 'transfer'">📥 转存</button>
+        <button :class="{active: view === 'preload'}" @click="view = 'preload'">⚡ 预加载</button>
+        <button :class="{active: view === 'cms'}" @click="view = 'cms'">📺 CMS</button>
         <button :class="{active: view === 'scheduler'}" @click="view = 'scheduler'">⏰ 定时</button>
+        <button :class="{active: view === 'tg'}" @click="view = 'tg'">📱 TG机器人</button>
         <button :class="{active: view === 'webhook'}" @click="view = 'webhook'">🔗 Webhook</button>
         <button :class="{active: view === 'plugin'}" @click="view = 'plugin'">🧩 插件</button>
         <button :class="{active: view === 'settings'}" @click="view = 'settings'">⚙️ 设置</button>
@@ -368,6 +430,166 @@ iframe.player { width: 100%; height: 100%; border: none; border-radius: 8px; bac
           </div>
           <div class="card-body">
             <p style="font-size:.8em;color:var(--text2)">当前缓存：{{ cacheCount }} 条直链</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 转存页 -->
+      <div v-if="view === 'transfer'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">📥 自动转存</div>
+            <div class="page-sub">链接转存 · 自动分类 · TMDB 命名</div>
+          </div>
+        </div>
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat-card"><div class="val">{{ transferTasks.length }}</div><div class="label">转存任务</div></div>
+          <div class="stat-card"><div class="val">{{ transferRunning }}</div><div class="label">进行中</div></div>
+          <div class="stat-card"><div class="val">{{ transferDone }}</div><div class="label">已完成</div></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h3>🔗 创建转存任务</h3></div>
+          <div class="card-body">
+            <div class="form-group" style="margin-bottom:12px">
+              <label>分享链接</label>
+              <input v-model="transferLink" class="input" placeholder="粘贴光鸭/夸克/115分享链接">
+            </div>
+            <button class="btn btn-primary" @click="createTransfer" :disabled="!transferLink || transferring">
+              {{ transferring ? '转存中...' : '📥 开始转存' }}
+            </button>
+            <div v-if="transferMsg" class="status-msg info" style="margin-top:10px">{{ transferMsg }}</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>📋 任务列表</h3></div>
+          <div class="card-body">
+            <div v-if="!transferTasks.length" class="empty-state"><p>暂无转存任务</p></div>
+            <div v-for="t in transferTasks" :key="t.id" class="task-item">
+              <div class="task-info">
+                <div class="task-name">{{ t.link_type }} · {{ t.link.substring(0,40) }}...</div>
+                <div class="task-meta">
+                  <span :class="'badge badge-' + (t.status === 'done' ? 'green' : t.status === 'failed' ? 'red' : 'blue')">{{ t.status }}</span>
+                  成功 {{ t.success_count }}/{{ t.file_count }} 文件
+                </div>
+              </div>
+              <span class="task-time">{{ formatTime(t.created_at) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 预加载页 -->
+      <div v-if="view === 'preload'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">⚡ 秒级起播</div>
+            <div class="page-sub">Emby 浏览即预热 · 直链缓存 · DNS预解析</div>
+          </div>
+          <button class="btn btn-primary" @click="rebuildPreload">🔄 重建索引</button>
+        </div>
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat-card"><div class="val">{{ cacheCount }}</div><div class="label">已缓存直链</div></div>
+          <div class="stat-card"><div class="val">{{ strmStats.count || 0 }}</div><div class="label">STRM 文件</div></div>
+          <div class="stat-card"><div class="val">~0ms</div><div class="label">预估起播</div></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h3>🚀 优化技术</h3></div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="opt-item"><span class="opt-icon">🔗</span><div><div class="opt-name">DNS 预缓存</div><div class="opt-desc">提前解析CDN域名IP，绕过DNS查询</div></div></div>
+              <div class="opt-item"><span class="opt-icon">🔒</span><div><div class="opt-name">TCP/TLS 预连接</div><div class="opt-desc">提前完成三次握手，HTTPS 0-RTT</div></div></div>
+              <div class="opt-item"><span class="opt-icon">📦</span><div><div class="opt-name">LRU 直链缓存</div><div class="opt-desc">热门文件缓存10分钟，亚秒级返回302</div></div></div>
+              <div class="opt-item"><span class="opt-icon">👁️</span><div><div class="opt-name">Emby 预加载</div><div class="opt-desc">浏览即后台预热，播放直接命中缓存</div></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>🎯 Emby Webhook 配置</h3></div>
+          <div class="card-body">
+            <p style="color:var(--text2);font-size:.85em;margin-bottom:12px">
+              将以下 Webhook URL 配置到 Emby 设置中，即可在浏览媒体时自动预加载直链：
+            </p>
+            <div class="code-block">{{ embyWebhookUrl }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CMS 页 -->
+      <div v-if="view === 'cms'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">📺 CMS 媒体库</div>
+            <div class="page-sub">订阅管理 · 下载队列 · 操作历史</div>
+          </div>
+          <button class="btn btn-primary" @click="openAddSub">+ 添加订阅</button>
+        </div>
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat-card"><div class="val">{{ cmsStats.total_subs || 0 }}</div><div class="label">订阅</div></div>
+          <div class="stat-card"><div class="val">{{ cmsStats.total_downloads || 0 }}</div><div class="label">下载项</div></div>
+          <div class="stat-card"><div class="val">{{ cmsStats.active_downloads || 0 }}</div><div class="label">进行中</div></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h3>📺 订阅列表</h3></div>
+          <div class="card-body">
+            <div v-if="!subscriptions.length" class="empty-state"><p>暂无订阅</p></div>
+            <div v-for="s in subscriptions" :key="s.id" class="task-item">
+              <div class="task-info">
+                <div class="task-name">{{ s.title }} ({{ s.year }})</div>
+                <div class="task-meta">{{ s.media_type === 'movie' ? '🎬 电影' : '📺 剧集' }} · {{ s.status }}</div>
+              </div>
+              <button class="btn btn-sm btn-danger" @click="delSub(s.id)">🗑️</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>📜 操作历史</h3></div>
+          <div class="card-body">
+            <div v-if="!history.length" class="empty-state"><p>暂无历史记录</p></div>
+            <div v-for="h in history.slice(0,30)" :key="h.id" class="log-line">
+              <span style="color:var(--text2);font-size:.8em">{{ formatTime(h.time) }}</span>
+              <span :class="'badge badge-' + (h.action === 'subscribe' ? 'blue' : 'green')" style="margin:0 6px">{{ h.action }}</span>
+              {{ h.detail }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TG 机器人页 -->
+      <div v-if="view === 'tg'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">📱 TG 机器人</div>
+            <div class="page-sub">丢链接自动转存 · 命令控制 · 进度通知</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h3>🤖 机器人配置</h3></div>
+          <div class="card-body">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+              <label class="toggle"><input type="checkbox" v-model="tgEnabled"><span class="toggle-slider"></span></label>
+              <span>启用 TG 机器人</span>
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label>Bot Token</label>
+              <input v-model="tgToken" class="input" placeholder="从 @BotFather 获取的 Token">
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label>管理员 ID（TG用户ID）</label>
+              <input v-model="tgAdminIds" class="input" placeholder="多个用逗号分隔">
+            </div>
+            <button class="btn btn-primary" @click="saveTG">💾 保存配置</button>
+            <div v-if="tgMsg" class="status-msg info" style="margin-top:10px">{{ tgMsg }}</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>📋 支持的命令</h3></div>
+          <div class="card-body">
+            <div class="log-line">/start - 机器人欢迎信息</div>
+            <div class="log-line">/status - 查看系统状态</div>
+            <div class="log-line">/sync - 触发全量同步</div>
+            <div class="log-line">/preload - 重建预加载索引</div>
+            <div class="log-line">/tasks - 查看转存任务</div>
+            <div class="log-line">直接发送分享链接 - 自动转存</div>
           </div>
         </div>
       </div>
