@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>xms - 光鸭云盘 STRM</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.0/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@4.5.0/400-500-600-700.css">
+  <style>
+:root {
+  --bg: #0d1117;
+  --bg2: #161b22;
+  --bg3: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text2: #8b949e;
+  --blue: #58a6ff;
+  --blue2: #388bfd;
+  --green: #3fb950;
+  --orange: #d29922;
+  --red: #f85149;
+  --purple: #bc8cff;
+  --radius: 10px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* 通用按钮 */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); color: var(--text); cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s; }
+.btn:hover { background: var(--bg3); border-color: var(--text2); }
+.btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btn-primary:hover { background: var(--blue2); border-color: var(--blue2); }
+.btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
+.btn-danger:hover { background: rgba(248,81,73,.1); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-icon { background: none; border: none; cursor: pointer; font-size: 1.1em; padding: 4px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* 输入框 */
+.input, select, textarea { width: 100%; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 13px; outline: none; transition: border-color .15s; }
+.input:focus, select:focus, textarea:focus { border-color: var(--blue); }
+.input::placeholder { color: var(--text2); }
+select { cursor: pointer; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 12px; color: var(--text2); font-weight: 500; }
+
+/* 卡片 */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); }
+.card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.card-header h3 { font-size: 14px; font-weight: 600; }
+.card-body { padding: 20px; }
+
+/* 标签/徽章 */
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.badge-blue { background: rgba(88,166,255,.15); color: var(--blue); }
+.badge-green { background: rgba(63,185,80,.15); color: var(--green); }
+.badge-orange { background: rgba(210,153,34,.15); color: var(--orange); }
+.badge-red { background: rgba(248,81,73,.15); color: var(--red); }
+
+/* 开关 */
+.toggle { position: relative; width: 36px; height: 20px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; inset: 0; background: var(--bg3); border-radius: 20px; cursor: pointer; transition: .2s; }
+.toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: var(--text2); border-radius: 50%; transition: .2s; }
+.toggle input:checked + .toggle-slider { background: var(--blue); }
+.toggle input:checked + .toggle-slider::before { transform: translateX(16px); background: #fff; }
+
+/* 登录页 */
+.login-page { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: radial-gradient(ellipse at 50% 0%, #1a1f2e 0%, var(--bg) 70%); }
+.login-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 360px; text-align: center; box-shadow: var(--shadow); }
+.login-logo { font-size: 2.8em; margin-bottom: 4px; }
+.login-sub { color: var(--text2); font-size: .85em; margin-bottom: 32px; }
+.login-tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--bg); border-radius: var(--radius); padding: 3px; }
+.login-tabs button { flex: 1; padding: 8px; border: none; background: none; color: var(--text2); cursor: pointer; border-radius: 7px; font-size: 13px; transition: all .15s; }
+.login-tabs button.active { background: var(--bg3); color: var(--text); font-weight: 500; }
+.qrcode-loading { color: var(--text2); padding: 50px 0; }
+.qrcode-box { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.qrcode-img { width: 200px; height: 200px; border-radius: 8px; background: #fff; padding: 8px; }
+.qrcode-hint { color: var(--text2); font-size: .8em; }
+.status-msg { padding: 10px; border-radius: var(--radius); margin-top: 12px; font-size: .8em; text-align: left; }
+.status-msg.error { background: rgba(248,81,73,.1); color: var(--red); border: 1px solid rgba(248,81,73,.2); }
+.status-msg.success { background: rgba(63,185,80,.1); color: var(--green); border: 1px solid rgba(63,185,80,.2); }
+.status-msg.info { background: rgba(88,166,255,.1); color: var(--blue); border: 1px solid rgba(88,166,255,.2); }
+.form-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+
+/* 主布局 */
+.app-layout { display: flex; height: 100vh; }
+.sidebar { width: 200px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+.sidebar-top { padding: 16px; border-bottom: 1px solid var(--border); }
+.sidebar-logo { font-size: 1.3em; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.sidebar-logo span { background: linear-gradient(135deg, var(--blue), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.sidebar-nav { flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+.sidebar-nav button { background: none; border: none; color: var(--text2); padding: 9px 12px; text-align: left; cursor: pointer; border-radius: var(--radius); font-size: .85em; transition: all .12s; display: flex; align-items: center; gap: 8px; }
+.sidebar-nav button:hover { background: var(--bg3); color: var(--text); }
+.sidebar-nav button.active { background: rgba(88,166,255,.12); color: var(--blue); font-weight: 500; }
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.sidebar-footer .username { font-size: .8em; color: var(--text2); }
+.main { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+/* 页面标题 */
+.page-header { margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; }
+.page-title { font-size: 1.2em; font-weight: 600; }
+.page-sub { color: var(--text2); font-size: .8em; margin-top: 2px; }
+
+/* 统计卡片 */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.stat-card .val { font-size: 1.8em; font-weight: 700; color: var(--blue); }
+.stat-card .label { font-size: .75em; color: var(--text2); margin-top: 4px; }
+
+/* 文件列表 */
+.file-toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.file-list { display: flex; flex-direction: column; gap: 2px; }
+.file-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--radius); cursor: pointer; transition: background .1s; }
+.file-item:hover { background: var(--bg2); }
+.file-item .icon { font-size: 1.2em; flex-shrink: 0; }
+.file-item .name { flex: 1; font-size: .85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item .size { font-size: .75em; color: var(--text2); flex-shrink: 0; }
+.file-item .actions { display: flex; gap: 4px; opacity: 0; transition: opacity .1s; }
+.file-item:hover .actions { opacity: 1; }
+.breadcrumb { display: flex; align-items: center; gap: 4px; font-size: .8em; color: var(--text2); margin-bottom: 12px; }
+.breadcrumb span { cursor: pointer; }
+.breadcrumb span:hover { color: var(--blue); }
+.empty-state { text-align: center; padding: 60px 0; color: var(--text2); }
+.empty-state .icon { font-size: 3em; margin-bottom: 12px; opacity: .3; }
+.empty-state p { font-size: .85em; }
+
+/* 任务列表 */
+.task-item { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.task-item .task-info { flex: 1; }
+.task-item .task-name { font-size: .9em; font-weight: 500; }
+.task-item .task-meta { font-size: .75em; color: var(--text2); margin-top: 2px; }
+
+/* 设置页面 */
+.settings-section { margin-bottom: 32px; }
+.settings-section h3 { font-size: .85em; font-weight: 600; margin-bottom: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.setting-row:last-child { border-bottom: none; }
+.setting-row .info { flex: 1; }
+.setting-row .info .name { font-size: .9em; }
+.setting-row .info .desc { font-size: .75em; color: var(--text2); margin-top: 2px; }
+
+/* 进度条 */
+.progress-bar { height: 4px; background: var(--bg3); border-radius: 4px; overflow: hidden; }
+.progress-bar .fill { height: 100%; background: var(--blue); border-radius: 4px; transition: width .3s; }
+
+/* 日志 */
+.log-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: .75em; color: var(--text2); max-height: 200px; overflow-y: auto; }
+.log-box .log-line { padding: 2px 0; }
+.log-box .log-line.success { color: var(--green); }
+.log-box .log-line.error { color: var(--red); }
+.log-box .log-line.info { color: var(--blue); }
+
+/* 弹窗 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 480px; max-width: 90vw; box-shadow: var(--shadow); }
+.modal-header { margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h3 { font-size: 1em; font-weight: 600; }
+.modal-close { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 1.3em; }
+.modal-close:hover { color: var(--text); }
+.modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+/* 播放器 */
+.player-modal { position: fixed; inset: 0; background: rgba(0,0,0,.9); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.player-box { width: 90vw; max-width: 1000px; aspect-ratio: 16/9; position: relative; }
+.player-close { position: absolute; top: -36px; right: 0; background: none; border: none; color: #fff; font-size: 1.5em; cursor: pointer; }
+iframe.player { width: 100%; height: 100%; border: none; border-radius: 8px; background: #000; }
+
+/* 标签页 */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.tab-btn { padding: 10px 16px; background: none; border: none; color: var(--text2); cursor: pointer; font-size: .85em; border-bottom: 2px solid transparent; transition: all .15s; margin-bottom: -1px; }
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 500; }
+
+/* 动画 */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
+.fade-enter-active, .fade-leave-active { transition: opacity .2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- 登录页 -->
+  <div v-if="!loggedIn" class="login-page">
+    <div class="login-box">
+      <div class="login-logo">🦆</div>
+      <div class="login-sub">光鸭云盘 · STRM + 302 播放服务</div>
+      <div class="login-tabs">
+        <button :class="{active: loginTab === 'qrcode'}" @click="loginTab = 'qrcode'; generateQRCode()">扫码登录</button>
+        <button :class="{active: loginTab === 'phone'}" @click="loginTab = 'phone'">手机登录</button>
+      </div>
+      <div v-if="loginTab === 'qrcode'">
+        <div v-if="!qrcode" class="qrcode-loading">⏳ 加载中...</div>
+        <div v-else class="qrcode-box">
+          <img :src="qrcode" class="qrcode-img" alt="扫码">
+          <p class="qrcode-hint">打开光鸭云盘 App → 扫一扫</p>
+          <button class="btn btn-sm" @click="generateQRCode">刷新二维码</button>
+        </div>
+        <div v-if="qrcodeStatus" class="status-msg" :class="qrcodeStatus.type">{{ qrcodeStatus.msg }}</div>
+      </div>
+      <div v-if="loginTab === 'phone'">
+        <div class="form-group" style="margin-bottom:10px">
+          <input v-model="phone" placeholder="手机号" class="input" maxlength="11">
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <div class="form-row">
+            <input v-model="smsCode" placeholder="短信验证码" class="input">
+            <button class="btn btn-sm" @click="sendSMS" :disabled="!phone || sendingSMS">{{ smsBtnText }}</button>
+          </div>
+        </div>
+        <div v-if="verificationToken" class="form-group" style="margin-bottom:10px">
+          <input v-model="username" placeholder="设置用户名" class="input">
+        </div>
+        <button class="btn btn-primary" style="width:100%" @click="signin" :disabled="!verificationToken">登录</button>
+        <div v-if="stepMsg" class="status-msg" :class="stepMsgType" style="margin-top:10px">{{ stepMsg }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div v-else class="app-layout">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-logo">🦆 <span>xms</span></div>
+      </div>
+      <nav class="sidebar-nav">
+        <button :class="{active: view === 'dashboard'}" @click="view = 'dashboard'">📊 概览</button>
+        <button :class="{active: view === 'files'}" @click="view = 'files'; loadFiles(null)">📁 文件</button>
+        <button :class="{active: view === 'strm'}" @click="view = 'strm'">🎬 STRM</button>
+        <button :class="{active: view === 'scheduler'}" @click="view = 'scheduler'">⏰ 定时</button>
+        <button :class="{active: view === 'webhook'}" @click="view = 'webhook'">🔗 Webhook</button>
+        <button :class="{active: view === 'plugin'}" @click="view = 'plugin'">🧩 插件</button>
+        <button :class="{active: view === 'settings'}" @click="view = 'settings'">⚙️ 设置</button>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="username">{{ userInfo.username || '已登录' }}</span>
+        <button class="btn-icon" @click="logout" title="退出">🔓</button>
+      </div>
+    </aside>
+
+    <!-- 主内容 -->
+    <main class="main">
+      <!-- 概览页 -->
+      <div v-if="view === 'dashboard'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">🦆 xms 控制台</div>
+            <div class="page-sub">光鸭云盘 · STRM 生成 · 302 直链</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" @click="openAddTask">+ 添加同步任务</button>
+            <button class="btn btn-primary" @click="startSyncNow">🚀 立即同步</button>
+          </div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="val">{{ stats.strmCount }}</div><div class="label">STRM 文件</div></div>
+          <div class="stat-card"><div class="val">{{ stats.fileCount }}</div><div class="label">云盘文件</div></div>
+          <div class="stat-card"><div class="val">{{ stats.taskCount }}</div><div class="label">定时任务</div></div>
+          <div class="stat-card"><div class="val">{{ stats.cacheCount }}</div><div class="label">缓存直链</div></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h3>📜 同步日志</h3><button class="btn btn-sm" @click="loadLogs">刷新</button></div>
+          <div class="card-body">
+            <div v-if="!logs.length" class="empty-state" style="padding:20px 0"><p>暂无日志</p></div>
+            <div v-else class="log-box">
+              <div v-for="(log,i) in logs.slice(-30)" :key="i" class="log-line" :class="log.level">{{ log.time }} {{ log.msg }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 文件页 -->
+      <div v-if="view === 'files'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">📁 文件管理</div>
+            <div class="breadcrumb">
+              <span @click="loadFiles(null); pathStack=[]">光鸭云盘</span>
+              <span v-for="(p,i) in pathStack" :key="i"> / <span @click="jumpToPath(i)">{{ p.name }}</span></span>
+            </div>
+          </div>
+          <div class="file-toolbar" style="margin:0">
+            <button class="btn btn-sm" @click="loadFiles(null); pathStack=[]">🏠</button>
+            <button class="btn btn-sm" @click="goBackDir" :disabled="!pathStack.length">⬆️</button>
+            <button class="btn btn-sm" @click="loadFiles(currentDirId)">🔄</button>
+          </div>
+        </div>
+        <div v-if="loading" class="empty-state"><p>⏳ 加载中...</p></div>
+        <div v-else>
+          <div class="file-list">
+            <div v-for="item in fileList" :key="item.fileId || item.id"
+                 class="file-item"
+                 :class="{folder: item.type === 1}"
+                 @click="item.type === 1 ? enterDir(item) : null">
+              <span class="icon">{{ item.type === 1 ? '📁' : getIcon(item) }}</span>
+              <span class="name">{{ item.fileName || item.name }}</span>
+              <span class="size">{{ item.type !== 1 ? formatSize(item.size) : '' }}</span>
+              <div class="actions">
+                <button v-if="item.type !== 1" class="btn-icon" @click.stop="previewFile(item)" title="播放">▶️</button>
+                <button v-if="item.type !== 1" class="btn-icon" @click.stop="genSTRM(item)" title="生成STRM">📄</button>
+              </div>
+            </div>
+          </div>
+          <div v-if="!fileList.length" class="empty-state"><div class="icon">📭</div><p>文件夹为空</p></div>
+          <div v-if="hasMore" style="text-align:center;padding:12px"><button class="btn btn-sm" @click="loadMore">加载更多</button></div>
+        </div>
+      </div>
+
+      <!-- STRM 页 -->
+      <div v-if="view === 'strm'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">🎬 STRM 生成</div>
+            <div class="page-sub">批量生成 · 直链预热 · 缓存管理</div>
+          </div>
+        </div>
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat-card"><div class="val">{{ strmStats.count }}</div><div class="label">STRM 文件</div></div>
+          <div class="stat-card"><div class="val">{{ strmStats.lastSync || '从未' }}</div><div class="label">上次同步</div></div>
+          <div class="stat-card"><div class="val">{{ cacheCount }}</div><div class="label">缓存直链</div></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h3>🚀 同步设置</h3></div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+              <div class="form-group">
+                <label>同步目录</label>
+                <select v-model="syncConfig.parentId" class="input">
+                  <option value="">全量同步</option>
+                  <option v-for="d in syncDirs" :key="d.id" :value="d.id">{{ d.name }}</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>同步深度</label>
+                <select v-model="syncConfig.depth" class="input">
+                  <option value="1">1 - 当前目录</option>
+                  <option value="3">3 - 子目录</option>
+                  <option value="5">5 - 深层</option>
+                  <option value="10">10 - 完整</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+              <label class="toggle"><input type="checkbox" v-model="syncConfig.deleteSync"><span class="toggle-slider"></span></label>
+              <span style="font-size:.85em">同步删除（远端删除 → 本地删除）</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+              <label class="toggle"><input type="checkbox" v-model="syncConfig.refreshLinks"><span class="toggle-slider"></span></label>
+              <span style="font-size:.85em">定期刷新直链（防止过期）</span>
+            </div>
+            <button class="btn btn-primary" @click="startSync" :disabled="syncing">
+              {{ syncing ? '🔄 同步中...' : '🚀 开始同步' }}
+            </button>
+            <div v-if="syncProgress > 0" style="margin-top:12px">
+              <div class="progress-bar"><div class="fill" :style="{width: syncProgress + '%'}"></div></div>
+              <p style="font-size:.75em;color:var(--text2);margin-top:4px">{{ syncProgressMsg }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3>🛠️ 缓存管理</h3>
+            <button class="btn btn-sm btn-danger" @click="clearCache">清空缓存</button>
+          </div>
+          <div class="card-body">
+            <p style="font-size:.8em;color:var(--text2)">当前缓存：{{ cacheCount }} 条直链</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 定时任务页 -->
+      <div v-if="view === 'scheduler'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">⏰ 定时任务</div>
+            <div class="page-sub">Crontab 风格 · 增量同步</div>
+          </div>
+          <button class="btn btn-primary" @click="openAddTask">+ 添加任务</button>
+        </div>
+        <div v-if="!tasks.length" class="empty-state"><div class="icon">⏰</div><p>暂无定时任务</p></div>
+        <div v-for="task in tasks" :key="task.id" class="task-item">
+          <div class="task-info">
+            <div class="task-name">{{ task.name }}</div>
+            <div class="task-meta">{{ task.cron }} · 深度{{ task.depth }} · {{ task.enabled ? '✅ 运行中' : '⛔ 已暂停' }}</div>
+            <div class="task-meta" v-if="task.lastRun">上次：{{ formatTime(task.lastRun) }}</div>
+          </div>
+          <label class="toggle"><input type="checkbox" v-model="task.enabled" @change="toggleTask(task)"><span class="toggle-slider"></span></label>
+          <button class="btn btn-sm" @click="runTaskNow(task)">▶️ 立即执行</button>
+          <button class="btn btn-sm btn-danger" @click="deleteTask(task)">🗑️</button>
+        </div>
+      </div>
+
+      <!-- Webhook 页 -->
+      <div v-if="view === 'webhook'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">🔗 Webhook</div>
+            <div class="page-sub">联动触发 · 转存即同步</div>
+          </div>
+          <button class="btn btn-primary" @click="openAddWebhook">+ 添加 Webhook</button>
+        </div>
+        <div v-if="!webhooks.length" class="empty-state"><div class="icon">🔗</div><p>暂无 Webhook</p></div>
+        <div v-for="wh in webhooks" :key="wh.id" class="task-item">
+          <div class="task-info">
+            <div class="task-name">{{ wh.name }}</div>
+            <div class="task-meta">{{ wh.url }}</div>
+            <div class="task-meta">触发事件：{{ wh.events.join(', ') || '全部' }}</div>
+          </div>
+          <label class="toggle"><input type="checkbox" v-model="wh.enabled"><span class="toggle-slider"></span></label>
+          <button class="btn btn-sm btn-danger" @click="deleteWebhook(wh)">🗑️</button>
+        </div>
+      </div>
+
+      <!-- 插件页 -->
+      <div v-if="view === 'plugin'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">🧩 插件</div>
+            <div class="page-sub">文件名修复 · 内容替换 · 通知推送</div>
+          </div>
+          <button class="btn btn-primary" @click="openAddPlugin">+ 添加插件</button>
+        </div>
+        <div class="tabs">
+          <button class="tab-btn" :class="{active: pluginTab === 'rename'}" @click="pluginTab = 'rename'">重命名</button>
+          <button class="tab-btn" :class="{active: pluginTab === 'replace'}" @click="pluginTab = 'replace'">内容替换</button>
+          <button class="tab-btn" :class="{active: pluginTab === 'notify'}" @click="pluginTab = 'notify'">通知</button>
+        </div>
+        <div v-if="!pluginList.length" class="empty-state"><div class="icon">🧩</div><p>暂无插件</p></div>
+        <div v-for="pl in pluginList" :key="pl.id" class="task-item">
+          <div class="task-info">
+            <div class="task-name">{{ pl.name }}</div>
+            <div class="task-meta">{{ pl.config.pattern || pl.config.service }}</div>
+          </div>
+          <label class="toggle"><input type="checkbox" v-model="pl.enabled"><span class="toggle-slider"></span></label>
+          <button class="btn btn-sm btn-danger" @click="deletePlugin(pl)">🗑️</button>
+        </div>
+      </div>
+
+      <!-- 设置页 -->
+      <div v-if="view === 'settings'">
+        <div class="page-header">
+          <div>
+            <div class="page-title">⚙️ 设置</div>
+            <div class="page-sub">基础配置 · 高级选项</div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>账号信息</h3>
+          <div class="card">
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="info"><div class="name">用户名</div><div class="desc">{{ userInfo.username || '-' }}</div></div>
+              </div>
+              <div class="setting-row">
+                <div class="info"><div class="name">用户ID</div><div class="desc">{{ userInfo.user_id || '-' }}</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>媒体库</h3>
+          <div class="card">
+            <div class="card-body">
+              <div class="form-group" style="margin-bottom:12px">
+                <label>STRM 输出目录</label>
+                <input v-model="cfg.strmDir" class="input" placeholder="/app/media/strm">
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>媒体根目录</label>
+                <input v-model="cfg.mediaRoot" class="input" placeholder="/app/media">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>TMDB 识别</h3>
+          <div class="card">
+            <div class="card-body">
+              <div class="form-group" style="margin-bottom:12px">
+                <label>TMDB API Key</label>
+                <input v-model="cfg.tmdbKey" class="input" placeholder="请输入 TMDB API Key（可选）">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:20px">
+          <button class="btn btn-primary" @click="saveSettings">💾 保存设置</button>
+          <button class="btn btn-danger" @click="logout">🔓 退出登录</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 播放器弹窗 -->
+  <div v-if="playerVisible" class="player-modal" @click.self="playerVisible = false">
+    <div class="player-box">
+      <button class="player-close" @click="playerVisible = false">×</button>
+      <iframe v-if="playerUrl" :src="playerUrl" class="player" allow="autoplay"></iframe>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
